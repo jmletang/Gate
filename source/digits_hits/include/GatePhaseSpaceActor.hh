@@ -96,9 +96,7 @@ public:
   void SetEnabledCompact(bool b){bEnableCompact = b;}
   void SetEnablePDGCode(bool b){bEnablePDGCode = b;}
 
-  void SetEnabledSphereProjection(bool b) { mSphereProjectionFlag = b; }
-  void SetSphereProjectionCenter(G4ThreeVector c) { mSphereProjectionCenter = c; }
-  void SetSphereProjectionRadius(double r) { mSphereProjectionRadius = r; }
+  void SetEnabledNearCenterProjection(bool b) { mNearCenterProjectionFlag = b; }
 
 protected:
   GatePhaseSpaceActor(G4String name, G4int depth=0);
@@ -131,9 +129,7 @@ protected:
   bool mUseVolFrame;
   bool mStoreOutPart;
 
-  bool mSphereProjectionFlag;
-  G4ThreeVector mSphereProjectionCenter;
-  double mSphereProjectionRadius;
+  bool mNearCenterProjectionFlag;
 
   bool bEnableCoordFrame;
   G4String bCoordFrame;

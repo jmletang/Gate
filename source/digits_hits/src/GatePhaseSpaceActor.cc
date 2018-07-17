@@ -60,9 +60,7 @@ GatePhaseSpaceActor::GatePhaseSpaceActor(G4String name, G4int depth):
   mStoreOutPart = false;
   SetIsAllStep(false);
 
-  mSphereProjectionFlag = false;
-  mSphereProjectionCenter = G4ThreeVector(0);
-  mSphereProjectionRadius = 0.0;
+  mNearCenterProjectionFlag = false;
 
   bEnableCoordFrame = false;
   bEnablePrimaryEnergy = false;
@@ -388,41 +386,29 @@ void GatePhaseSpaceActor::UserSteppingAction(const GateVVolume *, const G4Step *
   dz = localMomentum.z();
 
 
-  //------------- Option to project position on a sphere
+  //------------- Option to project position near the center
+  /*
+    Sometimes it is useful to store the particle position on a different
+    position than the one where it has been detected. The option
+    'mNearCenterProjectionFlag' change the particle position: it compute the
+    point on the particle direction that is the nearest to the center (origin
+    0,0,0).
+  */
 
-  /* Sometimes it is useful to store the particle position on a different
-     position than the one where it has been detected. The option
-     ''SphereProjection' change the particle position: it compute the projeciton
-     on a sphere. */
-  if (mSphereProjectionFlag) {
-    // Project point position on the use sphere
-    // https://en.wikipedia.org/wiki/Line–sphere_intersection
 
-    // Use the notation of wikipedia (wikipedia rocks!)
-    G4ThreeVector c = mSphereProjectionCenter;
-    G4ThreeVector o(x,y,z);
-    G4ThreeVector l(dx,dy,dz);
-    double r = mSphereProjectionRadius;
-
-    // Split equation in three parts A,B,C
-    G4ThreeVector diff = o-c;
-    double r2 = r*r;
-    double A = -2*(l.dot(o-c));
-    double B = pow(2*(l.dot(o-c)), 2) - 4*l.dot(l)*(diff.dot(diff)-r2);
-    double C = 2*l.dot(l);
-
-    // How many intersection ? 0,1 or 2 ?
-    // If no intersection, we ignore this hit
-    if (B<0) return;
-
-    // else we consider the closest one
-    double d1 = (A+sqrt(B))/C;
-    double d2 = (A-sqrt(B))/C;
-    double d = d1;
-    if (fabs(d2)<fabs(d1)) d = d2;
-    x = x+dx*d;
-    y = y+dy*d;
-    z = z+dz*d;
+  if (mNearCenterProjectionFlag) {
+    G4ThreeVector a(x,y,z);
+    G4ThreeVector b(x+dx, y+dy, z+dz);
+    G4ThreeVector o(0,0,0);
+    G4ThreeVector ao = o-a;
+    G4ThreeVector ab = b-a;
+    double alpha = ao.dot(ab);
+    double norm = ab.mag();
+    alpha = alpha/norm;
+    G4ThreeVector g = a + alpha*ab;
+    x = g.x();
+    y = g.y();
+    z = g.z();
   }
 
   //-------------Write weight of the steps presents at the simulation-------------

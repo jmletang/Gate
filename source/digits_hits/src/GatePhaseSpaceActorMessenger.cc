@@ -58,9 +58,7 @@ GatePhaseSpaceActorMessenger::~GatePhaseSpaceActorMessenger()
   delete bEnableCompactCmd;
   delete bEnableEmissionPointCmd;
   delete bEnablePDGCodeCmd;
-  delete bEnableSphereProjection;
-  delete bSetSphereProjectionCenter;
-  delete bSetSphereProjectionRadius;
+  delete bEnableNearCenterProjection;
 }
 //-----------------------------------------------------------------------------
 
@@ -232,20 +230,10 @@ void GatePhaseSpaceActorMessenger::BuildCommands(G4String base)
   guidance = "Output the PDGCode instead of the ParticleName.";
   bEnablePDGCodeCmd->SetGuidance(guidance);
 
-  bb = base+"/enableSphereProjection";
-  bEnableSphereProjection = new G4UIcmdWithABool(bb, this);
-  guidance = "Change the particle position point: project it on a sphere";
-  bEnableSphereProjection->SetGuidance(guidance);
-
-  bb = base+"/setSphereProjectionCenter";
-  bSetSphereProjectionCenter = new G4UIcmdWith3VectorAndUnit(bb, this);
-  guidance = "Set the center of the sphere where the points are projected";
-  bSetSphereProjectionCenter->SetGuidance(guidance);
-
-  bb = base+"/setSphereProjectionRadius";
-  bSetSphereProjectionRadius = new G4UIcmdWithADoubleAndUnit(bb, this);
-  guidance = "Set the radius of the sphere where the points are projected";
-  bSetSphereProjectionRadius->SetGuidance(guidance);
+  bb = base+"/enableNearCenterProjection";
+  bEnableNearCenterProjection = new G4UIcmdWithABool(bb, this);
+  guidance = "Change the particle position point: project close point to the center";
+  bEnableNearCenterProjection->SetGuidance(guidance);
 }
 //-----------------------------------------------------------------------------
 
@@ -283,9 +271,7 @@ void GatePhaseSpaceActorMessenger::SetNewValue(G4UIcommand* command, G4String pa
   if(command == bSpotIDFromSourceCmd) {pActor->SetSpotIDFromSource(param);pActor->SetIsSpotIDEnabled();};
   if(command == bEnablePDGCodeCmd) pActor->SetEnablePDGCode(bEnablePDGCodeCmd->GetNewBoolValue(param));
   if(command == bEnableCompactCmd) pActor->SetEnabledCompact(bEnableCompactCmd->GetNewBoolValue(param));
-  if(command == bEnableSphereProjection) pActor->SetEnabledSphereProjection(bEnableSphereProjection->GetNewBoolValue(param));
-  if(command == bSetSphereProjectionCenter) pActor->SetSphereProjectionCenter(bSetSphereProjectionCenter->GetNew3VectorValue(param));
-  if(command == bSetSphereProjectionRadius) pActor->SetSphereProjectionRadius(bSetSphereProjectionRadius->GetNewDoubleValue(param));
+  if(command == bEnableNearCenterProjection) pActor->SetEnabledNearCenterProjection(bEnableNearCenterProjection->GetNewBoolValue(param));
 
   GateActorMessenger::SetNewValue(command ,param );
 }
