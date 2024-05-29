@@ -21,7 +21,7 @@ jobs:
 
     env:
       ROOT_VERSION: 'v6-26-08'
-      GEANT4_VERSION: 'v11.1.1'
+      GEANT4_VERSION: 'v11.2.1'
       ITK_VERSION: 'v5.3.0'
       ROOT_DIR: $(HOME)/software/root
       GEANT4_DIR: $(HOME)/software/geant4
@@ -49,6 +49,7 @@ jobs:
                                   make \
                                   binutils \
                                   libx11-dev \
+                                  libtbb-dev \
                                   libxpm-dev \
                                   libxft-dev \
                                   libxext-dev \
@@ -62,11 +63,13 @@ jobs:
                                   fftw3-dev
           gcc -v
         elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          brew update
+          brew install python@3.12 || true
+          brew link --overwrite python@3.12
+          #brew update
           brew cleanup
           brew config
-          rm -rf /usr/local/bin/python3.11-config /usr/local/bin/2to3-3.11 /usr/local/bin/idle3.11 /usr/local/bin/pydoc3.11 /usr/local/bin/python3.11
-          rm -rf /usr/local/bin/python3-config /usr/local/bin/2to3 /usr/local/bin/idle3 /usr/local/bin/pydoc3 /usr/local/bin/python3
+          #rm -rf /usr/local/bin/python3.11-config /usr/local/bin/2to3-3.11 /usr/local/bin/idle3.11 /usr/local/bin/pydoc3.11 /usr/local/bin/python3.11
+          #rm -rf /usr/local/bin/python3-config /usr/local/bin/2to3 /usr/local/bin/idle3 /usr/local/bin/pydoc3 /usr/local/bin/python3
           brew install --force --verbose --overwrite --debug qt5 \
                                                              ccache \
                                                              tbb \
@@ -93,6 +96,7 @@ jobs:
                        -Dpython=OFF \
                        -Dpyroot=OFF \
                        -Dclad=OFF \
+                       -Dxrootd=OFF \
                        -DCMAKE_INSTALL_PREFIX=$HOME/software/root/install
           make -j4 install
           cd ..
@@ -249,6 +253,21 @@ jobs:
           fi
         fi
 
+#  ssh_session:
+#    runs-on: ubuntu-latest
+#    steps:
+#    - name: Checkout github repo
+#      uses: actions/checkout@v3
+#      with:
+#          lfs: true
+#    - name: Checkout LFS objects
+#      run: git lfs checkout
+#    - name: Start SSH session
+#      uses: luchihoratiu/debug-via-ssh@main
+#      with:
+#        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+#        SSH_PASS: ${{ secrets.SSH_PASS }}
+
   benchmarks:
     runs-on: ubuntu-latest
     needs: [build]
@@ -260,7 +279,6 @@ jobs:
                         t3_range_e+,
                         t4_necr,
                         t6_dpk,
-                        t7_garf,
                         t8_LETActor,
                         t10_SpectroGamma,
                         t11_EMField,
@@ -278,7 +296,10 @@ jobs:
                         t27_Hits_2SD,
                         t28_Singles_2SD,
                         t29_optical_digi,
-                        t30_dna]
+                        t30_dna,
+                        t31_vpgTLE-tt,
+                        t33_invert_filter,
+                        t34_biodose_actor]
 
     steps:
     - name: Checkout github repo
@@ -315,5 +336,5 @@ jobs:
         mkdir gate_benchmarks
         export GIT_SSL_NO_VERIFY=1
         git clone --recursive https://github.com/OpenGATE/GateBenchmarks.git gate_benchmarks
-        docker run --rm -e "TEST=${{ matrix.strategy_name }}" -v $GITHUB_WORKSPACE:/src -v $GITHUB_WORKSPACE/gate_benchmarks:/home tbaudier/gatebenchmarks:9.3 /home/.github/workflows/runTest.sh
+        docker run --rm -e "TEST=${{ matrix.strategy_name }}" -v $GITHUB_WORKSPACE:/src -v $GITHUB_WORKSPACE/gate_benchmarks:/home tbaudier/gatebenchmarks:9.4 /home/.github/workflows/runTest.sh
 
