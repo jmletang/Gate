@@ -39,16 +39,29 @@ class GateDigitizerMgr;
 
 //    01/2016 Rewritten completely by Jared.STRYDHORST@cea.fr
 
+//    2023 Added to GND kochebina@gmail.com
+
+/*
+  09/24 kochebina@gmail.com
+  Simplification of number of options for multiple coincidences 
+  remove "keep" and replace (or remove if double) with "take", 
+  i.e. all coincidecnes are now written on disk
+  keepIfAllAreGoods = takeWinnerIfAllAreGoods
+  keepIfOnlyOneGood = takeWinnerIfOnlyOneGood
+  keepIfAnyIsGood = takeWinnerOfGoods
+  kKeepAll = removed
+*/
 typedef enum {kKillAll,
               kTakeAllGoods,
               kKillAllIfMultipleGoods,
               kTakeWinnerOfGoods,
               kTakeWinnerIfIsGood,
               kTakeWinnerIfAllAreGoods,
-              kKeepIfAllAreGoods,
-              kKeepIfOnlyOneGood,
-              kKeepIfAnyIsGood,
-              kKeepAll} multiple_policy_t;
+              kTakeWinnerIfOnlyOneGood
+              //kKeepIfOnlyOneGood,
+              //kKeepIfAnyIsGood,
+              //kKeepAll
+              } multiple_policy_t;
 
 
 
@@ -170,6 +183,12 @@ public:
     void SetAcceptancePolicy4CC(const G4String& policy);
 
 
+    G4double GetMinS() const {return m_minS;}
+    G4double GetMaxDeltaZ() const {return m_maxDeltaZ;}
+
+    //! Set the GeometrySelector
+    void SetMinS(G4double val) { m_minS = val;}
+    void SetMaxDeltaZ(G4double val) { m_maxDeltaZ = val;}
 
 
 
@@ -190,7 +209,8 @@ protected:
     acceptance_policy_4CC_t m_acceptance_policy_4CC;    //! <Which is the criteria to accept coincidences in CC sys
     G4bool              m_allDigiOpenCoincGate;        //!< can a digi be part of two coincs?
     G4int               m_depth;                        //!< Depth of system-level for coincidences
-
+    G4double m_minS;  //!< contains the rebirth time.
+    G4double m_maxDeltaZ;  //!< contains the rebirth time.
     G4int coincID_CC;
 
 

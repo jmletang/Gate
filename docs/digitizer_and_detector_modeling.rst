@@ -225,7 +225,7 @@ Five types of distribution are available in GATE, namely:
 *  Gaussian distributions, defined by a mean value and a standard deviation. 
 *  Exponential distributions, defined by its power. 
 *  Manual distributions, defined by a discrete set of points specified in the GATE macro file. The data are linearly interpolated to define the function in a continuous range. 
-*  File distribution, acting as the manual distribution, but where the points are defined in a separate ASCII file, whose name is given as a parameter. This method is appropriate for large numbers of points and allows to describe any distribution in a totally generic way.
+*  File distribution, acting as the manual distribution, but where the points are defined in a separate ASCII file, whose name is given as a parameter. This method is appropriate for large numbers of points and allows to describe any distribution in a totally generic way. Now, GATE supports reading 2D distributions from ASCII files where values are organized in matrices.
 
 A distribution is declared by specifying its name then by creating a new instance, with its type name::
 
@@ -297,7 +297,8 @@ The possible type name available corresponds to the five distributions described
    +----------------+--------------------------------------------------------------------------------+
    | read           | do read the file (should be called after specifying all the other parameters)  | 
    +----------------+--------------------------------------------------------------------------------+
-
+   | ReadMatrix2d   | do read a data file that organizes its contents in a 2D matrix format          | 
+   +----------------+--------------------------------------------------------------------------------+ 
 
 Singles Digitizers
 -------------------
@@ -518,11 +519,53 @@ In case if the position obtained after applying a Gaussian blurring exceeds the 
 BEWARE: This relocation procedure is validated only for the first group level of crystals.
 
 **Example**::
- 
+
    /gate/digitizerMgr/crystal/SinglesDigitizer/Singles/insert   spatialResolution
    /gate/digitizerMgr/crystal/SinglesDigitizer/Singles/spatialResolution/fwhm 1.0 mm
    /gate/digitizerMgr/crystal/SinglesDigitizer/Singles/spatialResolution/confineInsideOfSmallestElement true 
-   
+
+**Configuring Spatial Resolution with 1D and 2D Distributions**::
+
+This approach is particularly essential  for  monolithic crystal detectors, where factors like edge effects and interaction positions significantly  may influence spatial  resolution.
+Here is an example of how to configure this in a macro file:
+
+**Example for 2D distribution**::
+
+
+  /gate/distributions/name    my_distrib2D
+  /gate/distributions/insert   File
+  /gate/distributions/my_distrib2D/setFileName    Lut(X,Y).txt
+  /gate/distributions/my_distrib2D/readMatrix2d
+  /gate/digitizerMgr/crystalUnit/SinglesDigitizer/Singles/insert spatialResolution
+  /gate/digitizerMgr/crystalUnit/SinglesDigitizer/Singles/spatialResolution/fwhmXYdistrib2D my_distrib2D
+**Example for 1D distribution**::
+
+  /gate/distributions/name   my_distrib1D
+  /gate/distributions/insert  File
+  /gate/distributions/my_distrib1D/setFileName  macros/LutY.txt
+  /gate/distributions/my_distrib1D/read
+  /gate/digitizerMgr/crystalUnit/SinglesDigitizer/Singles/insert spatialResolution
+  /gate/digitizerMgr/crystalUnit/SinglesDigitizer/Singles/spatialResolution/fwhmYdistrib my_distrib1D
+
+
+
+
+
+These commands allow for more precise control over the spatial resolution by using predefined distributions for the X and Y axes.
+
+BEWARE : The file for 2D Distribution  should be structured such that:
+
+-The first line contains the x values.
+
+-Each subsequent line begins with a y value followed by the standard deviation (stddev) values corresponding to each x value and y value pair.
+
+**Example**::
+
+-29.50 -28.50 -27.50 
+-29.50 9.62 13.66 10.22
+-28.50 11.38 11.18 10.23
+-27.50 12.82 10.43 9.70
+
 Energy Framing
 ^^^^^^^^^^^^^^
 *Previously Thresholder and Upholder*
@@ -1111,9 +1154,110 @@ Then, the rejection can be set to the whole event or only to those pulses within
 
 Example::
 
-	/gate/digitizerMgr/absorber/SinglesDigitizer/Singles/insert                        multipleRejection
+    /gate/digitizerMgr/absorber/SinglesDigitizer/Singles/insert                        multipleRejection
    /gate/digitizerMgr/absorber/SinglesDigitizer/Singles/multipleRejection/setMultipleDefinition volumeID
    /gate/digitizerMgr/absorber/SinglesDigitizer/Singles/multipleRejection/setEventRejection 1
+
+
+
+
+
+
+
+
+Virtual segmentation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+In traditional PET image reconstruction, software like CASToR utilizes crystal IDs instead of the position of the interaction. This approach has sufficed because the small crystals' size inherently defines the spatial resolution. However, new PET scanner systems are exploring the use of monolithic crystals, which can reconstruct interaction positions within the crystal with a specific resolution.
+
+The Virtual Segmentation Digitizer module provides a mechanism to generate an ID based on a virtual segmentation of the monolithic crystal, aligned with its spatial resolution. Ideally, the pitch size should be at least half of the position resolution. This virtual segmentation occurs post-simulation, ensuring that the simulation speed remains uncompromised even when dealing with large systems and numerous crystals such as total-body PET scans.
+
+A GateTool associated with this digitizer allows users to create a new geometry macro with the segmented geometry, suitable for use in image reconstruction software.
+
+**Geometry Requirements:**
+
+To utilize this digitizer, the cylindricalPET geometry must be configured as follows:
+The size of the crystal should be defined at the Submodule level using Air as the material.
+The crystal and layer0 levels should both reflect the crystal size and use the crystal's material.
+This setup allows new virtual IDs for the XYZ axes to be assigned at the Layer, Crystal, and Submodule levels, respectively.
+
+Example::
+
+	# CRYSTAL
+	/gate/rsector/daughters/name crystal
+	/gate/rsector/daughters/insert box
+	/gate/crystal/geometry/setXLength 10. mm
+	/gate/crystal/geometry/setYLength 59. mm
+	/gate/crystal/geometry/setZLength 59. mm
+	/gate/crystal/setMaterial Air
+
+	# Level saved for the virtual COLUMN
+	/gate/crystal/daughters/name column
+	/gate/crystal/daughters/insert box
+	/gate/column/geometry/setXLength 10. mm
+	/gate/column/geometry/setYLength 59. mm
+	/gate/column/geometry/setZLength 59. mm
+	/gate/column/setMaterial Air
+
+
+	#Level saved for the virtual ROW
+	/gate/column/daughters/name row
+	/gate/column/daughters/insert box
+	/gate/row/geometry/setXLength 10. mm
+	/gate/row/geometry/setYLength 59. mm
+	/gate/row/geometry/setZLength 59. mm
+	/gate/row/setMaterial Air
+
+	#Level saved for the virtual Pseudo-Crystal (now the real material needs to be used)
+	/gate/row/daughters/name pseudo-crystal
+	/gate/row/daughters/insert box
+	/gate/pseudo-crystal/geometry/setXLength 10. mm
+	/gate/pseudo-crystal/geometry/setYLength 59. mm
+	/gate/pseudo-crystal/geometry/setZLength 59. mm
+	/gate/pseudo-crystal/setMaterial PWO
+
+
+**Commands**
+
+*"nameAxis"* Enable users to specify which axes require discretization. The axis selected can be any combination of "XYZ", "XY", "XZ" or "YZ", "X", "Y" or "Z".
+
+*"pitch, pitchX, pitchY, pitchZ"* allow users to specify the desired pitch size for all axis, or specific values for X,Y and Z axis. If no pitch size is provided, the digitizer will use the spatial resolution value to compute the optimal pitch size ensuring that the number of bins, defined as (crystal size)/(pitch), is integer. Note that the spatial resolution must be a single value for each axis; if a the spatial resolution is defined with a distribution and no pitch value is provided, the digitizer will not function correctly.
+
+*"useMacroGenerator"* boolean flag that determines if the user wants to generate the new geometry macro with the segmentation.
+
+
+
+
+Example providing spatial resolution::
+
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/insert                      		spatialResolution
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/spatialResolution/fwhm			2. mm
+
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/insert                       		virtualSegmentation
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/virtualSegmentation/nameAxis 		XYZ
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/virtualSegmentation/useMacroGenerator true
+
+In this case, a value for the FWHM for the spatial resolution was provided but no pitch size was given to the virtual segmentation. The module will read the value of spatial resolution and will generate a pitch size that is, at least, half of the value of the FWHM in spatial resolution.
+
+
+Example providing the pitch::
+
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/insert                       virtualSegmentation
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/virtualSegmentation/nameAxis XYZ
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/virtualSegmentation/pitch 1.0 mm
+/gate/digitizerMgr/<sensitive_detector>/SinglesDigitizer/Singles/virtualSegmentation/useMacroGenerator true
+
+In this case, the pitch size is provided by the user and it will be used regardless of any values of FWHM provided in the spatial resolution module.
+
+
+
+
+
+
+
+
+
 
 
 .. _digitizer_multiple_processor_chains-label:
@@ -1182,9 +1326,9 @@ An experimental method used to estimate the number of random coincidences consis
 Multiple coincidences
 ~~~~~~~~~~~~~~~~~~~~~
 
-When more than two *singles* are found in coincidence, several type of behavior could be implemented. GATE allows to model 9 different rules that can be used in such a case. The list of rules along with their explanation are given in :numref:`policy_tab`, and a comparison of the effects of each processing rule for various cases of multiple coincidences is shown in :numref:`MultipleCases`. If no policy is specified, the default one used is: keepIfAllAreGoods.
+When more than two *singles* are found in coincidence, several type of behavior could be implemented. GATE allows to model 9 different rules that can be used in such a case. The list of rules along with their explanation are given in :numref:`policy_tab`, and a comparison of the effects of each processing rule for various cases of multiple coincidences is shown in :numref:`MultipleCases`. If no policy is specified, the default one used is: takeWinnerIfAllAreGoods.
 
-.. table:: Available multiple policy and associated meaning. When a multiple coincidence involving n *singles* is peocessed, it is first decomposed into a list of n·(n−1) pairs which are analyzed individually. In this table, the term "good" means that a pair of singles are in coincidence and that the 2 singles are separated by a number of blocks greater than or equal to the **minSectorDifference** parameter of the coincidence sorter. The prefix "take" means that 1 or more pairs of coincidences will be stored, while the prefix "keep" means that a unique coincidence, composed of at least three singles will be kept in the data flow and is called "multicoincidence". In the latter case, the multicoincidence will not be written to the disk, but may participate to a possible deadtime or bandwidth occupancy. The user may clear the multicoincidence at any desired step of the acquisition, by using the multipleKiller pulse processor (described in #Multiple coincidence removal). The "kill" prefix means that all events will be discarded and will not produce any coincidence.
+.. table:: Available multiple policy and associated meaning. When a multiple coincidence involving n *singles* is peocessed, it is first decomposed into a list of n·(n−1) pairs which are analyzed individually. In this table, the term "good" means that a pair of singles are in coincidence and that the 2 singles are separated by a number of blocks greater than or equal to the **minSectorDifference** parameter of the coincidence sorter. The prefix "take" means that 1 or more pairs of coincidences will be stored. The user may clear the multicoincidence at any desired step of the acquisition, by using the multipleKiller module (described in #Multiple coincidence removal). The "kill" prefix means that all events will be discarded and will not produce any coincidence.
    :widths: auto
    :name: policy_tab
 
@@ -1199,11 +1343,7 @@ When more than two *singles* are found in coincidence, several type of behavior 
    +-------------------------+--------------------------------------------------------------------------------------------------------+
    | takeWinnerIfAllAreGoods | If all pairs are goods, take the one with the highest energy                                           | 
    +-------------------------+--------------------------------------------------------------------------------------------------------+
-   | keepIfOnlyOneGood       | If exactly one pair is good, keep the multicoincidence                                                 | 
-   +-------------------------+--------------------------------------------------------------------------------------------------------+
-   | keepIfAnyIsGood         | If at least one pair is good, keep the multicoincidence                                                | 
-   +-------------------------+--------------------------------------------------------------------------------------------------------+
-   | keepIfAllAreGoods       | If all pairs are goods, keep the multicoincidence                                                      | 
+   | takeWinnerIfOnlyOneGood | If exactly one pair is good 			                                                      | 
    +-------------------------+--------------------------------------------------------------------------------------------------------+
    | killAllIfMultipleGoods  | If more than one pairs is good, the event is seen as a real "multiple" and thus, all events are killed | 
    +-------------------------+--------------------------------------------------------------------------------------------------------+
@@ -1214,7 +1354,7 @@ When more than two *singles* are found in coincidence, several type of behavior 
    :alt: Figure 5: MultipleCases
    :name: MultipleCases
 
-   Comparison of the behavior of the available multiple processing policies, for various multiple coincidence situations. The stars represent the detected singles. The size of the star, as well as the number next to it, indicate the energy level of the single (ie. single no 1 has more energy than single no 2, which has itself more energy than the single no 3). The lines represent the possible good coincidences (ie. with a sector difference higher than or equal to the minSectorDifference of the coincidence sorter). In the table, a minus(-) sign indicates that the event is killed (ie. no coincidence is formed). The ⋆ sign indicates that all the singles are kept into a unique multicoincidence, which will not be written to disk, but which might participate to data loss via dead time or bandwidth occupancy. In the other cases, the list of pairs which are written to the disk (unless being removed thereafter by possible filter applied to the coincidences) is indicated
+   Comparison of the behavior of the available multiple processing policies, for various multiple coincidence situations. The stars represent the detected singles. The size of the star, as well as the number next to it, indicate the energy level of the single (ie. single no 1 has more energy than single no 2, which has itself more energy than the single no 3). The lines represent the possible good coincidences (ie. with a sector difference higher than or equal to the minSectorDifference of the coincidence sorter). In the table, a minus(-) sign indicates that the event is killed (ie. no coincidence is formed).
 
 .. table:: Table associated with :numref:`MultipleCases`
    :widths: auto
@@ -1231,16 +1371,14 @@ When more than two *singles* are found in coincidence, several type of behavior 
    +-------------------------+--------+---------------------+--------------+--------------+
    | takeWinnerIfAllAreGoods | \-     | (1,2)               | \-           | \-           | 
    +-------------------------+--------+---------------------+--------------+--------------+
-   | keepIfOnlyOneGood       | \*     | \-                  | \-           | \-           | 
-   +-------------------------+--------+---------------------+--------------+--------------+
-   | keepIfAnyIsGood         | \*     | \*                  | \*           | \*           | 
-   +-------------------------+--------+---------------------+--------------+--------------+
-   | keepIfAllAreGoods       | \-     | \*                  | \-           | \-           | 
+   | takeWinnerIfOnlyOneGood | (1,2)  | \-                  | \-           | \-           | 
    +-------------------------+--------+---------------------+--------------+--------------+
    | killAllIfMultipleGoods  | (1,2)  | \-                  | \-           | \-           | 
    +-------------------------+--------+---------------------+--------------+--------------+
    | killAll                 | \-     | \-                  | \-           | \-           | 
    +-------------------------+--------+---------------------+--------------+--------------+
+
+**NOTE: In the previous versions (before 9.4) there were outdated policies with prefix "keep". Please, use keepIfOnlyOneGood=takeWinnerIfOnlyOneGood, keepIfAnyIsGood = takeWinnerOfGoods, keepIfAllAreGoods = takeWinnerIfAllAreGoods.** 
 
 .. _command_line-label:
 
@@ -1254,6 +1392,16 @@ To set up a coincidence window of 10 ns, the user should specify::
 To change the default value of the minimum sector difference for valid coincidences (the default value is 2), the command line should be used::
 
    /gate/digitizerMgr/CoincidenceSorter/Coincidences/minSectorDifference <number> 
+
+To change the default value of the maximum allowable difference in the z positions of two events (disabled by default), the command line should be used::
+
+  /gate/digitizer/Coincidences/setMaxDeltaZ <value_in_mm>
+
+For non-standard scanners, such as square-shaped ones, you can set the minimum allowable sector distance s between two events. This option provides more flexibility than the default minimum sector difference::
+
+/gate/digitizer/Coincidences/setSMin <value_in_mm>
+
+This command is particularly useful for defining the minimum spatial separation required between two events in non-circular or irregular scanner geometries. The setMinS command allows users to control this parameter directly.
 
 By default, the offset value is equal to 0, which corresponds to a prompt coincidence sorter. If a delayed coincidence sorter is to be simulated, with a 100 ns time shift for instance, the offset value should be set using the command::
 
@@ -1368,10 +1516,23 @@ The dead time for coincidences works in the same way as that acting on the *sing
 
 Coincidence buffers
 ~~~~~~~~~~~~~~~~~~~
+It simulates the operation of a detector by modeling coincidences, transfer speed limits, and data loss due to buffer capacity overflows. It manages a memory buffer for coincidence events, allowing for the modeling of data loss due to buffer overflow. It uses a read frequency and allows defining the buffer size and read mode, influencing how events are processed. There are two buffer operation modes. Mode 1 empties the entire buffer at each read clock tick, while Mode 0 reads events one by one.
+Here is an example of how to configure this in a macro file:
+
+**Example** ::
+
+
+/gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert buffer
+/gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/setBufferSize 64 B
+/gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/setReadFrequency 10 MHz
+/gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/setMode 1
+
+
 
 For a coincidence sorter user can chose a presort buffer with a following command: 
 
    /gate/digitizer/Coincidences/setPresortBufferSize 256 
+
 
 A presort buffer contains singles that have not yet been checked for coincidence with the already open coincidence windows. The default value is 256, the minimum value is 32. For more details, check https://iopscience.iop.org/article/10.1088/0031-9155/61/18/N522
 
@@ -1379,9 +1540,27 @@ A presort buffer contains singles that have not yet been checked for coincidence
 Multiple coincidence removal
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If the multiple coincidences are kept and not splitted into pairs (ie. if any of the **keepXXX** multiple coincidence policy is used), the multicoincidences could participate to dataflow occupancy, but could not be written to the disk. Unless otherwise specified, any multicoincidence is then cleared from data just before the disk writing. If needed, this clearing could be performed at any former coincidence processing step, by inserting the **multipleKiller** module at the required level. This module has no parameter and just kill the multicoincidence events. Multiple coincidences split into many pairs are not affected by this module and cannot be distinguished from the normal "simple" coincidences. To insert a multipleKiller, one has to use the syntax::
 
-   /gate/digitizer/myCoincChain/insert multipleKiller
+If the multiple coincidences are kept and not split into pairs (i.e., if any of the **keepXXX** multiple coincidence policies are used), the multicoincidences could contribute to dataflow occupancy but cannot be written to the disk. Unless otherwise specified, any multicoincidence is then cleared from data just before the disk writing. If needed, this clearing could be performed at any earlier coincidence processing step by inserting the **multiplesKiller** module at the required level. This module has no parameters and simply removes the multicoincidence events. Multiple coincidences split into many pairs are not affected by this module and cannot be distinguished from normal "simple" coincidences. To insert a multipleKiller, use the syntax ::
+
+
+/gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert multiplesKiller
+
+
+
+Coincidence Time Difference Selector
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This module reprocesses the list of coincidences and applies a cut on the time difference between two Singles forming the coincidence, i. e. appalling a cut tighter than coincidence time window selected by coincidence sorter.
+
+**Example** ::
+
+  /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert timeDiffSelector
+  /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/timeDiffSelector/setMin 1 ns
+  /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/timeDiffSelector/setMax 100 ns
+
+
+These commands configure the `Coincidence Time Difference Selector` to keep only the events where the time difference is between 1 nanosecond and 100 nanoseconds. Events outside this range will be ignored.
 
 Example of a digitizer setting
 ------------------------------
@@ -1465,27 +1644,43 @@ Example::
    66 /gate/digitizerMgr/CoincidenceSorter/Coincidences/setOffset 0. ns 
    67 /gate/digitizerMgr/CoincidenceSorter/Coincidences/setWindow 24. ns 
    68 /gate/digitizerMgr/CoincidenceSorter/Coincidences/minSectorDifference 3  
-   69 
-   70 /gate/digitizerMgr/name delayedCoincidences  
-   71 /gate/digitizerMgr/insert coincidenceSorter  
-   72 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/setInputCollection cutSingles  
-   73 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/setOffset 100. ns  
-   74 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/setWindow 24. ns  
-   75 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/minSectorDifference 3  
-   76 
-   77 /gate/digitizer/name finalCoinc  (NOT YET ADDED IN 9.3)  
-   78 /gate/digitizer/insert coincidenceChain 
-   79 /gate/digitizer/finalCoinc/addInputName delay 
-   80 /gate/digitizer/finalCoinc/addInputName Coincidences  
-   81 /gate/digitizer/finalCoinc/usePriority true  
-   82 /gate/digitizer/finalCoinc/insert deadtime  
-   83 /gate/digitizer/finalCoinc/deadtime/setDeadTime 60 ns  
-   84 /gate/digitizer/finalCoinc/deadtime/setMode nonparalysable  
-   85 /gate/digitizer/finalCoinc/deadtime/conserveAllEvent true  
-   86 /gate/digitizer/finalCoinc/insert buffer  
-   87 /gate/digitizer/finalCoinc/buffer/setBufferSize 32 B 
-   88 /gate/digitizer/finalCoinc/buffer/setReadFrequency 14.45 MHz  
-   89 /gate/digitizer/finalCoinc/buffer/setMode 0 
+   69 /gate/digitizerMgr/CoincidenceSorter/Coincidences/setSMax 1 mm
+   70 /gate/digitizerMgr/CoincidenceSorter/Coincidences/setDeltaZMax 10 mm
+   71
+   72 /gate/digitizerMgr/name delayedCoincidences  
+   73 /gate/digitizerMgr/insert coincidenceSorter  
+   74 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/setInputCollection cutSingles  
+   75 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/setOffset 100. ns  
+   76 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/setWindow 24. ns  
+   77 /gate/digitizerMgr/CoincidenceSorter/delayedCoincidences/minSectorDifference 3  
+   78 
+   79 /gate/digitizerMgr/name finalCoinc 
+   80 /gate/digitizerMgr/insert CoincidenceDigitizer
+   81 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/addInputCollection Delay
+   82 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/addInputCollection Coincidences
+   83 #/gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/usePriority false
+   84 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/describe
+   85
+   86 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert deadtime
+   87 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/deadtime/setDeadTime 60 ns
+   88 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/deadtime/setMode paralysable
+   89 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/deadtime/conserveAllEvent false #true
+   90 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/deadtime/verbose  6
+   91
+   92 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert buffer
+   93 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/setBufferSize 64 B
+   94 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/setReadFrequency 0.1 MHz
+   95 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/setMode 0
+   96 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/buffer/describe
+   97
+   98 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert multiplesKiller
+   99  
+   100 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/insert timeDiffSelector
+   101 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/timeDiffSelector/setMin 1 ns
+   102 /gate/digitizerMgr/CoincidenceDigitizer/finalCoinc/timeDiffSelector/setMax 500 ns
+
+
+
 
 Lines 1 to 15: The branch named "Singles" contains the result of applying the adder, readout, blurring, and threshold (50 keV) modules.
 
@@ -1501,9 +1696,8 @@ Lines 65 to 68: The "default" coincidence branch consists of data taken from the
 
 Lines 70 to 75: A second coincidence branch is defined (line 71), which is named "delayedCoincidences". This branch takes its data from the same output ("cutSingles"), but is defined by a delayed coincidence window of 24 ns, and a 100 ns delay (line 73).
 
-Lines 77 to 89: The delayed and  the prompts coincidence lines are grouped (lines 79-80). Between two coincidences coming from these two lines and occuring within a given event, the priority is set to the delayed line, since it is inserted before the prompt line, and the priority is used (line 81). A non-paralysable dead time of 60 ns is applied on the delayed+prompt coincidences (lines 82-85). If more than one coincidence occur inside a given event, the dead time can kill all of them or none of them, depending on the arrival time of the first one. As a consequence, if a delay coincidence is immediately followed by a prompt coincidence due to the same photon, then, the former will not hide the latter (line 85). Finally, a memory buffer of 32 coincidences, read at a frequency of 14.45 MHz, in an event-by-event basis (line 89) is applied to the delayed+prompt sum (lines 86-89).
+Lines 80 to 102: The delayed and prompt coincidence collections are grouped (lines 81-82). The priority is not set between coincidences from these collections, as the priority option is commented out (line 83). A paralysable dead time of 60 ns is applied to the combined delayed and prompt coincidences (lines 87-90). If more than one coincidence occurs within a given event, the dead time may eliminate all or none of them, depending on the arrival time of the first coincidence. As a result, if a delayed coincidence is immediately followed by a prompt coincidence from the same photon, the delayed one may suppress the prompt one (line 89). Finally, a memory buffer of 64 coincidences, read at a frequency of 0.1 MHz, on an event-by-event basis (line 94), is applied to the combined delayed and prompt coincidences (lines 92-96). Additional modules, including a multiples killer and a time difference selector, are inserted. The time difference selector sets a coincidence window ranging from 1 ns to 500 ns (lines 98-102).
 
-Digitizer optimization
 ----------------------
 
 In GATE standard operation mode, primary particles are generated by the source manager, and then propagated through the attenuating geometry before generating *hits* in the detectors, which feed into the digitizer chain. While this operation mode is suited for conventional simulations, it is inefficient when trying to optimize the parameters of the digitizer chain. In this case, the user needs to compare the results obtained for different sets of digitizer parameters that are based upon the same series of hits. Thus, repeating the particle generation and propagation stages of a simulation is unnecessary for tuning the digitizer setting.
@@ -1672,4 +1866,5 @@ Finally, we call the 'triCoincProcessor' module and we plug on it the second sys
    /gate/digitizer/TriCoinc/triCoincProcessor/setSinglesPulseListName Singles_S1
    /gate/digitizer/TriCoinc/triCoincProcessor/setWindow 15 ns
    /gate/digitizer/TriCoinc/triCoincProcessor/setSinglesBufferSize 40
+
 

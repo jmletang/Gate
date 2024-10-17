@@ -40,8 +40,10 @@ GateCoincidenceSorter::GateCoincidenceSorter(GateDigitizerMgr* itsDigitizerMgr,
     m_offset(0.),
     m_offsetJitter(0.),
     m_minSectorDifference(2),
+	m_minS (-1),
+	m_maxDeltaZ ( -1),
     m_forceMinSecDifferenceToZero(false),	  
-    m_multiplesPolicy(kKeepIfAllAreGoods),
+    m_multiplesPolicy(kTakeWinnerIfAllAreGoods),
     m_allDigiOpenCoincGate(false),
     m_depth(1),
     m_presortBufferSize(256),
@@ -130,15 +132,31 @@ void GateCoincidenceSorter::SetMultiplesPolicy(const G4String& policy)
     else if (policy=="killAllIfMultipleGoods")
     	m_multiplesPolicy=kKillAllIfMultipleGoods;
     else if (policy=="keepIfAnyIsGood")
-    	m_multiplesPolicy=kKeepIfAnyIsGood;
+      {
+	m_multiplesPolicy= kTakeWinnerOfGoods;//kKeepIfAnyIsGood;
+	G4cout<<"WARNING (Coincidence Sorter): used policy keepIfAnyIsGood is outdated. Please, use takeWinnerOfGoods instead.\n";
+      }
     else if (policy=="keepIfOnlyOneGood")
-    	m_multiplesPolicy=kKeepIfOnlyOneGood;
-    else if (policy=="keepAll")
-    	m_multiplesPolicy=kKeepAll;
+      {
+      m_multiplesPolicy= kTakeWinnerIfOnlyOneGood;//kKeepIfOnlyOneGood;
+      G4cout<<"WARNING (Coincidence Sorter): used policy keepIfOnlyOneGood is outdated. Please, use takeWinnerIfOnlyOneGood instead.\n";
+      }
+    else if (policy=="takeWinnerIfOnlyOneGood")
+      {
+      m_multiplesPolicy= kTakeWinnerIfOnlyOneGood;
+      }
+    
+    //else if (policy=="keepAll")
+    //	m_multiplesPolicy=kKeepAll;
     else {
-    	if (policy!="keepIfAllAreGoods")
-    	    G4cout<<"WARNING : policy not recognized, using default : keepMultiplesIfAllAreGoods\n";
-  	m_multiplesPolicy=kKeepIfAllAreGoods;
+      if(policy == "keepIfAllAreGoods")
+	G4cout<<"WARNING (Coincidence Sorter): used policy keepIfAllAreGoods is outdated. Please, use takeWinnerIfAllAreGoods instead.\n";
+      else
+    	if (policy!="takeWinnerIfAllAreGoods" )
+	  G4cout<<"WARNING : policy not recognized, using default : takeWinnerIfAllAreGoods\n";
+	
+  	m_multiplesPolicy= kTakeWinnerIfAllAreGoods;//kKeepIfAllAreGoods;
+
     }
 }
 //------------------------------------------------------------------------------------------------------
@@ -182,16 +200,6 @@ void GateCoincidenceSorter::Digitize()
   GateSinglesDigitizer* inputDigitizer;
 
   inputDigitizer = digitizerMgr->FindSinglesDigitizer(m_inputName);//m_collectionName);
-  //G4cout<<"m_inputName "<<inputDigitizer->GetName()<<G4endl;
-  if (!inputDigitizer)
-	  if (digitizerMgr->m_SDlist.size()==1)
-  	  {
-		  G4String new_name= m_inputName+"_"+digitizerMgr->m_SDlist[0]->GetName();
-		  //G4cout<<" new_name "<< new_name<<G4endl;
-		  inputDigitizer = digitizerMgr->FindSinglesDigitizer(new_name);
-  	  }
-	  else
-		  GateError("ERROR: The name _"+ m_inputName+"_ is unknown for input singles digicollection! \n");
 
   if(!m_system)
     {
@@ -462,9 +470,9 @@ void GateCoincidenceSorter::ProcessCompletedCoincidenceWindow(GateCoincidenceDig
       return;
     }
 
-    //G4cout<<"nGoods = "<<  nGoods<<G4endl;
+    /*//G4cout<<"nGoods = "<<  nGoods<<G4endl;
     // all the Keep* policies pass on a multi-coincidence rather than breaking into pairs
-    if( ( (m_multiplesPolicy==kKeepIfAnyIsGood) /*&& (nGoods>0)*/ ) || // if nGoods = 0, we don't get here
+    if( ( (m_multiplesPolicy==kKeepIfAnyIsGood) /*&& (nGoods>0)*/ /*) || // if nGoods = 0, we don't get here
     	( (m_multiplesPolicy==kKeepIfOnlyOneGood) && (nGoods==1)           ) ||
         ( (m_multiplesPolicy==kKeepIfAllAreGoods) && (nGoods==(nDigis*(nDigis-1)/2)) ) )
     {
@@ -478,6 +486,21 @@ void GateCoincidenceSorter::ProcessCompletedCoincidenceWindow(GateCoincidenceDig
       delete coincidence;
       return;
     }
+     */
+    if	( (m_multiplesPolicy==kTakeWinnerIfOnlyOneGood) && (nGoods==1)) 
+    {
+    	m_OutputCoincidenceDigiCollection->insert(coincidence);
+      return; // don't delete the coincidence
+    }
+    if( (m_multiplesPolicy==kTakeWinnerIfOnlyOneGood) )
+    {
+      delete coincidence;
+      return;
+    }
+
+
+
+    
     // find winner and count the goods
     maxE = 0.0;
     nGoods = 0;
@@ -747,10 +770,37 @@ G4bool GateCoincidenceSorter::IsForbiddenCoincidence(const GateDigi* digi1, cons
       	    G4cout << "[GateCoincidenceSorter::IsForbiddenCoincidence]: coincidence between neighbour blocks --> refused\n";
 	return true;
 	}
+  G4ThreeVector globalPos1 = digi1->GetGlobalPos();
+  G4ThreeVector globalPos2 = digi2->GetGlobalPos();
+
+  // Check the difference in Z between the two positions
+  if ((m_maxDeltaZ > 0) && (fabs(globalPos2.z() - globalPos1.z()) > m_maxDeltaZ)) {
+      if (nVerboseLevel > 1)
+          G4cout << "[GateCoincidenceSorter::IsForbiddenCoincidence]: difference in Z too large --> refused\n";
+      return true;
+  }
+
+  // Calculate the denominator for distance 's' in the XY plane
+  G4double denom = (globalPos1.y() - globalPos2.y()) * (globalPos1.y() - globalPos2.y()) +
+                   (globalPos2.x() - globalPos1.x()) * (globalPos2.x() - globalPos1.x());
+
+  G4double s = 0.0;
+  if (denom != 0.0) {
+      denom = sqrt(denom);
+      s = (globalPos1.x() * (globalPos1.y() - globalPos2.y()) +
+           globalPos1.y() * (globalPos2.x() - globalPos1.x())) / denom;
+  }
+
+
+  // Check the distance 's' against the maximum threshold
+  if ((m_minS < 0) && (fabs(s) < m_minS)) {
+      if (nVerboseLevel > 1)
+          G4cout << "[GateCoincidenceSorter::IsForbiddenCoincidence]: distance s too large --> refused\n";
+      return true;
+  }
 
   return false;
-   }
-
+  }
 }
 //------------------------------------------------------------------------------------------------------
 
